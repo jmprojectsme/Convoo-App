@@ -1,6 +1,8 @@
 // ===== CONVOO - MAIN APP =====
 // Real-time messaging PWA with Supabase backend
 
+console.log('Convoo: Script loaded');
+
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
@@ -21,6 +23,7 @@ let realtimeSubscriptions = [];
 
 // Initialize the app
 async function initApp() {
+    console.log('Convoo: initApp called');
     try {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
@@ -43,181 +46,222 @@ async function initApp() {
 // ===== AUTH FUNCTIONS =====
 
 function showAuthScreen() {
+    console.log('Convoo: Showing auth screen');
     document.getElementById('authScreen').classList.add('active');
     document.getElementById('appScreen').classList.remove('active');
 }
 
 function showAppScreen() {
+    console.log('Convoo: Showing app screen');
     document.getElementById('authScreen').classList.remove('active');
     document.getElementById('appScreen').classList.add('active');
 }
 
-// Auth tab switching
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.auth-tabs .tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tab = e.target.dataset.tab;
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Convoo: DOM Content Loaded');
+    
+    // Auth tab switching
+    const authTabs = document.querySelectorAll('.auth-tabs .tab-btn');
+    console.log('Convoo: Found', authTabs.length, 'auth tabs');
+    
+    authTabs.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            console.log('Convoo: Tab clicked', this.dataset.tab);
+            e.preventDefault();
+            
+            const tab = this.dataset.tab;
             document.querySelectorAll('.auth-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
+            this.classList.add('active');
+            
             document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
-            document.getElementById(tab === 'login' ? 'loginForm' : 'signupForm').classList.add('active');
+            const formId = tab === 'login' ? 'loginForm' : 'signupForm';
+            const form = document.getElementById(formId);
+            console.log('Convoo: Showing form', formId);
+            if (form) {
+                form.classList.add('active');
+            }
         });
     });
 
-    // Login
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        const errorEl = document.getElementById('loginError');
-        
-        try {
-            errorEl.textContent = '';
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Login form
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
             
-            if (error) throw error;
-            
-            currentUser = data.user;
-            showAppScreen();
-            await loadChats();
-            setupRealtimeSubscriptions();
-        } catch (error) {
-            errorEl.textContent = error.message;
-            console.error('Login error:', error);
-        }
-    });
-
-    // Signup
-    document.getElementById('signupForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('signupName').value;
-        const email = document.getElementById('signupEmail').value;
-        const password = document.getElementById('signupPassword').value;
-        const confirmPassword = document.getElementById('signupPasswordConfirm').value;
-        const errorEl = document.getElementById('signupError');
-        
-        try {
-            errorEl.textContent = '';
-            
-            if (password !== confirmPassword) {
-                throw new Error('Passwords do not match');
+            try {
+                errorEl.textContent = '';
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                
+                if (error) throw error;
+                
+                currentUser = data.user;
+                showAppScreen();
+                await loadChats();
+                setupRealtimeSubscriptions();
+            } catch (error) {
+                errorEl.textContent = error.message;
+                console.error('Login error:', error);
             }
+        });
+    }
+
+    // Signup form
+    const signupForm = document.getElementById('signupForm');
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupPasswordConfirm').value;
+            const errorEl = document.getElementById('signupError');
             
-            const { data, error } = await supabase.auth.signUp({ email, password });
-            
-            if (error) throw error;
-            
-            // Create user profile
-            await supabase.from('users').insert([
-                {
-                    id: data.user.id,
-                    email: email,
-                    display_name: name,
-                    created_at: new Date().toISOString()
+            try {
+                errorEl.textContent = '';
+                
+                if (password !== confirmPassword) {
+                    throw new Error('Passwords do not match');
                 }
-            ]);
-            
-            currentUser = data.user;
-            showAppScreen();
-            await loadChats();
-            setupRealtimeSubscriptions();
-        } catch (error) {
-            errorEl.textContent = error.message;
-            console.error('Signup error:', error);
-        }
-    });
+                
+                const { data, error } = await supabase.auth.signUp({ email, password });
+                
+                if (error) throw error;
+                
+                // Create user profile
+                await supabase.from('users').insert([
+                    {
+                        id: data.user.id,
+                        email: email,
+                        display_name: name,
+                        created_at: new Date().toISOString()
+                    }
+                ]);
+                
+                currentUser = data.user;
+                showAppScreen();
+                await loadChats();
+                setupRealtimeSubscriptions();
+            } catch (error) {
+                errorEl.textContent = error.message;
+                console.error('Signup error:', error);
+            }
+        });
+    }
 
     // Logout
-    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
-        e.preventDefault();
-        try {
-            // Unsubscribe from realtime
-            realtimeSubscriptions.forEach(sub => sub.unsubscribe());
-            realtimeSubscriptions = [];
-            
-            await supabase.auth.signOut();
-            currentUser = null;
-            currentChatId = null;
-            showAuthScreen();
-        } catch (error) {
-            console.error('Logout error:', error);
-        }
-    });
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                realtimeSubscriptions.forEach(sub => sub.unsubscribe());
+                realtimeSubscriptions = [];
+                
+                await supabase.auth.signOut();
+                currentUser = null;
+                currentChatId = null;
+                showAuthScreen();
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+    }
 
-    // ===== USER MENU =====
-    document.getElementById('userMenuBtn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.getElementById('userDropdown').classList.toggle('active');
-    });
+    // User menu
+    const userMenuBtn = document.getElementById('userMenuBtn');
+    if (userMenuBtn) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('userDropdown').classList.toggle('active');
+        });
+    }
 
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.user-menu')) {
-            document.getElementById('userDropdown').classList.remove('active');
+            const dropdown = document.getElementById('userDropdown');
+            if (dropdown) dropdown.classList.remove('active');
         }
     });
 
-    // ===== NEW CHAT MODAL =====
+    // New chat modal
     const newChatModal = document.getElementById('newChatModal');
     const newChatBtn = document.getElementById('newChatBtn');
+    
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', () => {
+            newChatModal.classList.add('active');
+            loadUsersForChat();
+        });
+    }
 
-    newChatBtn.addEventListener('click', () => {
-        newChatModal.classList.add('active');
-        loadUsersForChat();
-    });
-
-    document.querySelector('#newChatModal .close-btn').addEventListener('click', () => {
-        newChatModal.classList.remove('active');
-    });
-
-    newChatModal.addEventListener('click', (e) => {
-        if (e.target === newChatModal) {
+    const newChatCloseBtn = document.querySelector('#newChatModal .close-btn');
+    if (newChatCloseBtn) {
+        newChatCloseBtn.addEventListener('click', () => {
             newChatModal.classList.remove('active');
-        }
-    });
+        });
+    }
 
-    // Send message
-    document.getElementById('messageForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = document.getElementById('messageInput');
-        const content = input.value.trim();
-        
-        if (!content || !currentChatId) return;
-        
-        try {
-            const messageData = {
-                content,
-                sender_id: currentUser.id,
-                created_at: new Date().toISOString()
-            };
-            
-            if (currentChatType === 'direct') {
-                messageData.direct_message_id = currentChatId;
-            } else {
-                messageData.group_chat_id = currentChatId;
+    if (newChatModal) {
+        newChatModal.addEventListener('click', (e) => {
+            if (e.target === newChatModal) {
+                newChatModal.classList.remove('active');
             }
+        });
+    }
+
+    // Message form
+    const messageForm = document.getElementById('messageForm');
+    if (messageForm) {
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
             
-            const { error } = await supabase.from('messages').insert([messageData]);
+            if (!content || !currentChatId) return;
             
-            if (error) throw error;
-            
-            input.value = '';
-            input.style.height = 'auto';
-            
-            // Reload messages
-            await loadMessages(currentChatId, currentChatType);
-        } catch (error) {
-            console.error('Send message error:', error);
-            alert('Failed to send message');
-        }
-    });
+            try {
+                const messageData = {
+                    content,
+                    sender_id: currentUser.id,
+                    created_at: new Date().toISOString()
+                };
+                
+                if (currentChatType === 'direct') {
+                    messageData.direct_message_id = currentChatId;
+                } else {
+                    messageData.group_chat_id = currentChatId;
+                }
+                
+                const { error } = await supabase.from('messages').insert([messageData]);
+                
+                if (error) throw error;
+                
+                input.value = '';
+                input.style.height = 'auto';
+                
+                await loadMessages(currentChatId, currentChatType);
+            } catch (error) {
+                console.error('Send message error:', error);
+                alert('Failed to send message');
+            }
+        });
+    }
 
     // Auto-resize textarea
-    document.getElementById('messageInput').addEventListener('input', (e) => {
-        e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-    });
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        messageInput.addEventListener('input', (e) => {
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+        });
+    }
 
-    // ===== MODAL TABS =====
+    // Modal tabs
     document.querySelectorAll('.modal .tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const modal = e.target.closest('.modal');
@@ -227,7 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.classList.add('active');
             
             modal.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            modal.querySelector(`#${tab}-tab`)?.classList.add('active');
+            const tabContent = modal.querySelector(`#${tab}-tab`);
+            if (tabContent) tabContent.classList.add('active');
         });
     });
 
@@ -251,66 +296,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Create group chat
-    document.getElementById('createGroupForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const groupName = document.getElementById('groupName').value.trim();
-        const selectedUsers = Array.from(document.querySelectorAll('.group-user-checkbox:checked'))
-            .map(cb => cb.dataset.userId);
-        
-        if (!groupName || selectedUsers.length === 0) {
-            alert('Please enter a group name and select at least one member');
-            return;
-        }
-        
-        try {
-            // Create group chat
-            const { data: newGroup, error: createError } = await supabase
-                .from('group_chats')
-                .insert([
-                    {
-                        name: groupName,
-                        created_by: currentUser.id,
-                        created_at: new Date().toISOString()
-                    }
-                ])
-                .select()
-                .single();
+    // Create group form
+    const createGroupForm = document.getElementById('createGroupForm');
+    if (createGroupForm) {
+        createGroupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const groupName = document.getElementById('groupName').value.trim();
+            const selectedUsers = Array.from(document.querySelectorAll('.group-user-checkbox:checked'))
+                .map(cb => cb.dataset.userId);
             
-            if (createError) throw createError;
+            if (!groupName || selectedUsers.length === 0) {
+                alert('Please enter a group name and select at least one member');
+                return;
+            }
             
-            // Add members (including creator)
-            const members = [currentUser.id, ...selectedUsers].map(userId => ({
-                group_chat_id: newGroup.id,
-                user_id: userId,
-                joined_at: new Date().toISOString()
-            }));
-            
-            const { error: membersError } = await supabase
-                .from('group_members')
-                .insert(members);
-            
-            if (membersError) throw membersError;
-            
-            document.getElementById('createGroupForm').reset();
-            await loadChats();
-            loadChat(newGroup.id, 'group');
-            newChatModal.classList.remove('active');
-        } catch (error) {
-            console.error('Create group error:', error);
-            alert('Failed to create group');
-        }
-    });
+            try {
+                const { data: newGroup, error: createError } = await supabase
+                    .from('group_chats')
+                    .insert([
+                        {
+                            name: groupName,
+                            created_by: currentUser.id,
+                            created_at: new Date().toISOString()
+                        }
+                    ])
+                    .select()
+                    .single();
+                
+                if (createError) throw createError;
+                
+                const members = [currentUser.id, ...selectedUsers].map(userId => ({
+                    group_chat_id: newGroup.id,
+                    user_id: userId,
+                    joined_at: new Date().toISOString()
+                }));
+                
+                const { error: membersError } = await supabase
+                    .from('group_members')
+                    .insert(members);
+                
+                if (membersError) throw membersError;
+                
+                document.getElementById('createGroupForm').reset();
+                await loadChats();
+                loadChat(newGroup.id, 'group');
+                document.getElementById('newChatModal').classList.remove('active');
+            } catch (error) {
+                console.error('Create group error:', error);
+                alert('Failed to create group');
+            }
+        });
+    }
+
+    console.log('Convoo: All event listeners attached');
 });
 
-// Auth tab switching (OLD - REMOVE)
+// ===== CHAT FUNCTIONS =====
 
 async function loadChats() {
     const chatsList = document.getElementById('chatsList');
     chatsList.innerHTML = '<div class="empty-state">Loading...</div>';
     
     try {
-        // Load direct message chats
         const { data: directChats, error: directError } = await supabase
             .from('direct_messages')
             .select(`
@@ -330,7 +377,6 @@ async function loadChats() {
         
         if (directError) throw directError;
         
-        // Load group chats
         const { data: groupChats, error: groupError } = await supabase
             .from('group_chats')
             .select(`
@@ -353,7 +399,6 @@ async function loadChats() {
         
         const allChats = [];
         
-        // Process direct chats
         if (directChats) {
             for (const chat of directChats) {
                 const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -375,7 +420,6 @@ async function loadChats() {
             }
         }
         
-        // Process group chats
         if (groupChats) {
             for (const chat of groupChats) {
                 const isMember = chat.group_members?.some(m => m.user_id === currentUser.id);
@@ -392,7 +436,6 @@ async function loadChats() {
             }
         }
         
-        // Sort by last message time
         allChats.sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
         
         if (allChats.length === 0) {
@@ -439,18 +482,15 @@ async function loadChat(chatId, chatType) {
     currentChatId = chatId;
     currentChatType = chatType;
     
-    // Update UI
     document.querySelectorAll('.chat-item').forEach(item => {
         item.classList.remove('active');
     });
     document.querySelector(`[data-chat-id="${chatId}"]`)?.classList.add('active');
     
-    // Show chat window
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('chatWindow').style.display = 'flex';
     
     try {
-        // Load chat info
         if (chatType === 'direct') {
             const { data: directChat } = await supabase
                 .from('direct_messages')
@@ -478,7 +518,6 @@ async function loadChat(chatId, chatType) {
             document.getElementById('chatStatus').textContent = `${groupChat.group_members?.length || 0} members`;
         }
         
-        // Load messages
         await loadMessages(chatId, chatType);
     } catch (error) {
         console.error('Load chat error:', error);
@@ -486,7 +525,6 @@ async function loadChat(chatId, chatType) {
 }
 
 async function loadMessages(chatId, chatType) {
-    const table = chatType === 'direct' ? 'messages' : 'messages';
     const messagesContainer = document.getElementById('messagesContainer');
     messagesContainer.innerHTML = '<div class="empty-state">Loading messages...</div>';
     
@@ -523,7 +561,6 @@ async function loadMessages(chatId, chatType) {
             messagesContainer.appendChild(msgEl);
         });
         
-        // Scroll to bottom
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {
         console.error('Load messages error:', error);
@@ -552,10 +589,9 @@ function createMessageElement(msg) {
     return el;
 }
 
-// Send message
-// (moved to DOMContentLoaded above)
-
 // ===== NEW CHAT FUNCTIONS =====
+
+async function loadUsersForChat() {
     try {
         const { data: users, error } = await supabase
             .from('users')
@@ -573,7 +609,6 @@ function createMessageElement(msg) {
             return;
         }
         
-        // Direct message users
         usersList.innerHTML = '';
         users.forEach(user => {
             const el = document.createElement('div');
@@ -589,7 +624,6 @@ function createMessageElement(msg) {
             usersList.appendChild(el);
         });
         
-        // Group chat users (with checkboxes)
         groupUsersList.innerHTML = '';
         users.forEach(user => {
             const el = document.createElement('label');
@@ -616,7 +650,6 @@ function createMessageElement(msg) {
 
 async function startDirectMessage(userId) {
     try {
-        // Check if chat already exists
         const { data: existing } = await supabase
             .from('direct_messages')
             .select('id')
@@ -626,7 +659,6 @@ async function startDirectMessage(userId) {
         if (existing) {
             loadChat(existing.id, 'direct');
         } else {
-            // Create new direct message chat
             const { data: newChat, error } = await supabase
                 .from('direct_messages')
                 .insert([
@@ -645,7 +677,7 @@ async function startDirectMessage(userId) {
             loadChat(newChat.id, 'direct');
         }
         
-        newChatModal.classList.remove('active');
+        document.getElementById('newChatModal').classList.remove('active');
     } catch (error) {
         console.error('Start direct message error:', error);
         alert('Failed to start chat');
@@ -655,7 +687,6 @@ async function startDirectMessage(userId) {
 // ===== REALTIME SUBSCRIPTIONS =====
 
 function setupRealtimeSubscriptions() {
-    // Subscribe to new messages
     const channel = supabase.channel('messages')
         .on(
             'postgres_changes',
@@ -667,7 +698,6 @@ function setupRealtimeSubscriptions() {
                 )) {
                     loadMessages(currentChatId, currentChatType);
                 }
-                // Reload chats list for new message indicators
                 loadChats();
             }
         )
@@ -704,4 +734,6 @@ function escapeHtml(text) {
 }
 
 // ===== INIT =====
+console.log('Convoo: About to call initApp');
 initApp();
+console.log('Convoo: initApp called');
