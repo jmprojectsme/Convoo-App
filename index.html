@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convoo - Real-time Chat App</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2563eb">
+    <meta name="description" content="Real-time messaging app with 1-on-1 and group chats for communities">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Convoo">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="icon" type="image/png" href="logo.png">
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div id="authScreen" class="screen active">
+        <div class="auth-container">
+            <div class="auth-header">
+                <div class="logo"><img src="logo.png" alt="Convoo" class="logo-img"></div>
+                <h1>Convoo</h1>
+                <p>Real-time messaging for communities</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="tab-btn active" data-tab="login">Sign In</button>
+                <button class="tab-btn" data-tab="signup">Create Account</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form active">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                <p class="form-error" id="loginError"></p>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signupForm" class="auth-form">
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <input type="text" id="signupName" placeholder="Your name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signupEmail" placeholder="your@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="signupPassword" placeholder="••••••••" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="signupPasswordConfirm" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                <p class="form-error" id="signupError"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="appScreen" class="screen">
+        <div class="app-container">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Convoo</h2>
+                    <div class="user-menu">
+                        <button id="userMenuBtn" class="icon-btn">⚙️</button>
+                        <div id="userDropdown" class="dropdown">
+                            <a href="#" id="profileLink">👤 Profile</a>
+                            <a href="#" id="settingsLink">⚙️ Settings</a>
+                            <button id="logoutBtn" class="logout-btn">🚪 Logout</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-tabs">
+                    <button class="chat-tab active" data-type="direct">Direct</button>
+                    <button class="chat-tab" data-type="group">Groups</button>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" id="searchChats" placeholder="Search chats...">
+                </div>
+
+                <div id="chatsList" class="chats-list">
+                    <div class="empty-state">No conversations yet</div>
+                </div>
+
+                <button id="newChatBtn" class="btn btn-primary btn-full">+ New Chat</button>
+            </aside>
+
+            <!-- Chat Area -->
+            <main class="chat-area">
+                <div id="emptyState" class="empty-chat">
+                    <div class="empty-icon">💬</div>
+                    <h2>Select a conversation</h2>
+                    <p>Or start a new chat to begin messaging</p>
+                </div>
+
+                <div id="chatWindow" class="chat-window" style="display: none;">
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <div class="chat-info">
+                            <h3 id="chatTitle"></h3>
+                            <p id="chatStatus"></p>
+                        </div>
+                        <div class="chat-actions">
+                            <button id="infoBtnChat" class="icon-btn">ℹ️</button>
+                            <button id="muteBtn" class="icon-btn">🔔</button>
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="messagesContainer" class="messages-container"></div>
+
+                    <!-- Message Input -->
+                    <div class="message-input-area">
+                        <form id="messageForm">
+                            <div class="input-wrapper">
+                                <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+                                <button type="submit" class="btn-send">📤</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- New Chat Modal -->
+    <div id="newChatModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Start New Chat</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="direct-users">Direct Message</button>
+                    <button class="tab-btn" data-tab="create-group">Create Group</button>
+                </div>
+
+                <!-- Direct Message Tab -->
+                <div id="direct-users-tab" class="tab-content active">
+                    <div class="search-box">
+                        <input type="text" id="searchUsers" placeholder="Search users...">
+                    </div>
+                    <div id="usersList" class="users-list">
+                        <div class="empty-state">No users available</div>
+                    </div>
+                </div>
+
+                <!-- Create Group Tab -->
+                <div id="create-group-tab" class="tab-content">
+                    <form id="createGroupForm">
+                        <div class="form-group">
+                            <label>Group Name</label>
+                            <input type="text" id="groupName" placeholder="e.g., Community Disaster Relief" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Add Members</label>
+                            <div id="groupUsersList" class="group-users-list">
+                                <div class="empty-state">Loading users...</div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Create Group</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Info Modal -->
+    <div id="chatInfoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Chat Details</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div id="chatInfoContent" class="modal-body">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="main.js"></script>
+</body>
+</html>

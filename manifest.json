@@ -1,0 +1,62 @@
+{
+    "name": "Convoo - Real-time Chat",
+    "short_name": "Convoo",
+    "description": "Real-time messaging app with 1-on-1 and group chats. Perfect for community communication.",
+    "start_url": "/convoo/",
+    "scope": "/convoo/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "background_color": "#ffffff",
+    "theme_color": "#2563eb",
+    "categories": ["productivity", "communication"],
+    "screenshots": [
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "icons": [
+        {
+            "src": "logo.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "New Chat",
+            "short_name": "New Chat",
+            "description": "Start a new conversation",
+            "url": "/convoo/?tab=new-chat",
+            "icons": [
+                {
+                    "src": "logo.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        }
+    ],
+    "prefer_related_applications": false
+}
