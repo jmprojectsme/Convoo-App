@@ -53,109 +53,257 @@ function showAppScreen() {
 }
 
 // Auth tab switching
-document.querySelectorAll('.auth-tabs .tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const tab = e.target.dataset.tab;
-        document.querySelectorAll('.auth-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
-        document.getElementById(tab === 'login' ? 'loginForm' : 'signupForm').classList.add('active');
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.auth-tabs .tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.target.dataset.tab;
+            document.querySelectorAll('.auth-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            document.querySelectorAll('.auth-form').forEach(form => form.classList.remove('active'));
+            document.getElementById(tab === 'login' ? 'loginForm' : 'signupForm').classList.add('active');
+        });
+    });
+
+    // Login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        const errorEl = document.getElementById('loginError');
+        
+        try {
+            errorEl.textContent = '';
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            
+            if (error) throw error;
+            
+            currentUser = data.user;
+            showAppScreen();
+            await loadChats();
+            setupRealtimeSubscriptions();
+        } catch (error) {
+            errorEl.textContent = error.message;
+            console.error('Login error:', error);
+        }
+    });
+
+    // Signup
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('signupName').value;
+        const email = document.getElementById('signupEmail').value;
+        const password = document.getElementById('signupPassword').value;
+        const confirmPassword = document.getElementById('signupPasswordConfirm').value;
+        const errorEl = document.getElementById('signupError');
+        
+        try {
+            errorEl.textContent = '';
+            
+            if (password !== confirmPassword) {
+                throw new Error('Passwords do not match');
+            }
+            
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            
+            if (error) throw error;
+            
+            // Create user profile
+            await supabase.from('users').insert([
+                {
+                    id: data.user.id,
+                    email: email,
+                    display_name: name,
+                    created_at: new Date().toISOString()
+                }
+            ]);
+            
+            currentUser = data.user;
+            showAppScreen();
+            await loadChats();
+            setupRealtimeSubscriptions();
+        } catch (error) {
+            errorEl.textContent = error.message;
+            console.error('Signup error:', error);
+        }
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            // Unsubscribe from realtime
+            realtimeSubscriptions.forEach(sub => sub.unsubscribe());
+            realtimeSubscriptions = [];
+            
+            await supabase.auth.signOut();
+            currentUser = null;
+            currentChatId = null;
+            showAuthScreen();
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    });
+
+    // ===== USER MENU =====
+    document.getElementById('userMenuBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('userDropdown').classList.toggle('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.user-menu')) {
+            document.getElementById('userDropdown').classList.remove('active');
+        }
+    });
+
+    // ===== NEW CHAT MODAL =====
+    const newChatModal = document.getElementById('newChatModal');
+    const newChatBtn = document.getElementById('newChatBtn');
+
+    newChatBtn.addEventListener('click', () => {
+        newChatModal.classList.add('active');
+        loadUsersForChat();
+    });
+
+    document.querySelector('#newChatModal .close-btn').addEventListener('click', () => {
+        newChatModal.classList.remove('active');
+    });
+
+    newChatModal.addEventListener('click', (e) => {
+        if (e.target === newChatModal) {
+            newChatModal.classList.remove('active');
+        }
+    });
+
+    // Send message
+    document.getElementById('messageForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('messageInput');
+        const content = input.value.trim();
+        
+        if (!content || !currentChatId) return;
+        
+        try {
+            const messageData = {
+                content,
+                sender_id: currentUser.id,
+                created_at: new Date().toISOString()
+            };
+            
+            if (currentChatType === 'direct') {
+                messageData.direct_message_id = currentChatId;
+            } else {
+                messageData.group_chat_id = currentChatId;
+            }
+            
+            const { error } = await supabase.from('messages').insert([messageData]);
+            
+            if (error) throw error;
+            
+            input.value = '';
+            input.style.height = 'auto';
+            
+            // Reload messages
+            await loadMessages(currentChatId, currentChatType);
+        } catch (error) {
+            console.error('Send message error:', error);
+            alert('Failed to send message');
+        }
+    });
+
+    // Auto-resize textarea
+    document.getElementById('messageInput').addEventListener('input', (e) => {
+        e.target.style.height = 'auto';
+        e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+    });
+
+    // ===== MODAL TABS =====
+    document.querySelectorAll('.modal .tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const modal = e.target.closest('.modal');
+            const tab = e.target.dataset.tab;
+            
+            modal.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            modal.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            modal.querySelector(`#${tab}-tab`)?.classList.add('active');
+        });
+    });
+
+    // Chat tabs filter
+    document.querySelectorAll('.chat-tab').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            const type = e.target.dataset.type;
+            const chatsList = document.getElementById('chatsList');
+            const items = chatsList.querySelectorAll('.chat-item');
+            
+            items.forEach(item => {
+                if (type === 'all' || item.dataset.chatType === type) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // Create group chat
+    document.getElementById('createGroupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const groupName = document.getElementById('groupName').value.trim();
+        const selectedUsers = Array.from(document.querySelectorAll('.group-user-checkbox:checked'))
+            .map(cb => cb.dataset.userId);
+        
+        if (!groupName || selectedUsers.length === 0) {
+            alert('Please enter a group name and select at least one member');
+            return;
+        }
+        
+        try {
+            // Create group chat
+            const { data: newGroup, error: createError } = await supabase
+                .from('group_chats')
+                .insert([
+                    {
+                        name: groupName,
+                        created_by: currentUser.id,
+                        created_at: new Date().toISOString()
+                    }
+                ])
+                .select()
+                .single();
+            
+            if (createError) throw createError;
+            
+            // Add members (including creator)
+            const members = [currentUser.id, ...selectedUsers].map(userId => ({
+                group_chat_id: newGroup.id,
+                user_id: userId,
+                joined_at: new Date().toISOString()
+            }));
+            
+            const { error: membersError } = await supabase
+                .from('group_members')
+                .insert(members);
+            
+            if (membersError) throw membersError;
+            
+            document.getElementById('createGroupForm').reset();
+            await loadChats();
+            loadChat(newGroup.id, 'group');
+            newChatModal.classList.remove('active');
+        } catch (error) {
+            console.error('Create group error:', error);
+            alert('Failed to create group');
+        }
     });
 });
 
-// Login
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    const errorEl = document.getElementById('loginError');
-    
-    try {
-        errorEl.textContent = '';
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        
-        if (error) throw error;
-        
-        currentUser = data.user;
-        showAppScreen();
-        await loadChats();
-        setupRealtimeSubscriptions();
-    } catch (error) {
-        errorEl.textContent = error.message;
-        console.error('Login error:', error);
-    }
-});
-
-// Signup
-document.getElementById('signupForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('signupName').value;
-    const email = document.getElementById('signupEmail').value;
-    const password = document.getElementById('signupPassword').value;
-    const confirmPassword = document.getElementById('signupPasswordConfirm').value;
-    const errorEl = document.getElementById('signupError');
-    
-    try {
-        errorEl.textContent = '';
-        
-        if (password !== confirmPassword) {
-            throw new Error('Passwords do not match');
-        }
-        
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        
-        if (error) throw error;
-        
-        // Create user profile
-        await supabase.from('users').insert([
-            {
-                id: data.user.id,
-                email: email,
-                display_name: name,
-                created_at: new Date().toISOString()
-            }
-        ]);
-        
-        currentUser = data.user;
-        showAppScreen();
-        await loadChats();
-        setupRealtimeSubscriptions();
-    } catch (error) {
-        errorEl.textContent = error.message;
-        console.error('Signup error:', error);
-    }
-});
-
-// Logout
-document.getElementById('logoutBtn').addEventListener('click', async (e) => {
-    e.preventDefault();
-    try {
-        // Unsubscribe from realtime
-        realtimeSubscriptions.forEach(sub => sub.unsubscribe());
-        realtimeSubscriptions = [];
-        
-        await supabase.auth.signOut();
-        currentUser = null;
-        currentChatId = null;
-        showAuthScreen();
-    } catch (error) {
-        console.error('Logout error:', error);
-    }
-});
-
-// ===== USER MENU =====
-document.getElementById('userMenuBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.getElementById('userDropdown').classList.toggle('active');
-});
-
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.user-menu')) {
-        document.getElementById('userDropdown').classList.remove('active');
-    }
-});
-
-// ===== CHAT FUNCTIONS =====
+// Auth tab switching (OLD - REMOVE)
 
 async function loadChats() {
     const chatsList = document.getElementById('chatsList');
@@ -405,68 +553,9 @@ function createMessageElement(msg) {
 }
 
 // Send message
-document.getElementById('messageForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('messageInput');
-    const content = input.value.trim();
-    
-    if (!content || !currentChatId) return;
-    
-    try {
-        const messageData = {
-            content,
-            sender_id: currentUser.id,
-            created_at: new Date().toISOString()
-        };
-        
-        if (currentChatType === 'direct') {
-            messageData.direct_message_id = currentChatId;
-        } else {
-            messageData.group_chat_id = currentChatId;
-        }
-        
-        const { error } = await supabase.from('messages').insert([messageData]);
-        
-        if (error) throw error;
-        
-        input.value = '';
-        input.style.height = 'auto';
-        
-        // Reload messages
-        await loadMessages(currentChatId, currentChatType);
-    } catch (error) {
-        console.error('Send message error:', error);
-        alert('Failed to send message');
-    }
-});
+// (moved to DOMContentLoaded above)
 
-// Auto-resize textarea
-document.getElementById('messageInput').addEventListener('input', (e) => {
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-});
-
-// ===== NEW CHAT MODAL =====
-
-const newChatModal = document.getElementById('newChatModal');
-const newChatBtn = document.getElementById('newChatBtn');
-
-newChatBtn.addEventListener('click', () => {
-    newChatModal.classList.add('active');
-    loadUsersForChat();
-});
-
-document.querySelector('#newChatModal .close-btn').addEventListener('click', () => {
-    newChatModal.classList.remove('active');
-});
-
-newChatModal.addEventListener('click', (e) => {
-    if (e.target === newChatModal) {
-        newChatModal.classList.remove('active');
-    }
-});
-
-async function loadUsersForChat() {
+// ===== NEW CHAT FUNCTIONS =====
     try {
         const { data: users, error } = await supabase
             .from('users')
@@ -562,92 +651,6 @@ async function startDirectMessage(userId) {
         alert('Failed to start chat');
     }
 }
-
-// Create group chat
-document.getElementById('createGroupForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const groupName = document.getElementById('groupName').value.trim();
-    const selectedUsers = Array.from(document.querySelectorAll('.group-user-checkbox:checked'))
-        .map(cb => cb.dataset.userId);
-    
-    if (!groupName || selectedUsers.length === 0) {
-        alert('Please enter a group name and select at least one member');
-        return;
-    }
-    
-    try {
-        // Create group chat
-        const { data: newGroup, error: createError } = await supabase
-            .from('group_chats')
-            .insert([
-                {
-                    name: groupName,
-                    created_by: currentUser.id,
-                    created_at: new Date().toISOString()
-                }
-            ])
-            .select()
-            .single();
-        
-        if (createError) throw createError;
-        
-        // Add members (including creator)
-        const members = [currentUser.id, ...selectedUsers].map(userId => ({
-            group_chat_id: newGroup.id,
-            user_id: userId,
-            joined_at: new Date().toISOString()
-        }));
-        
-        const { error: membersError } = await supabase
-            .from('group_members')
-            .insert(members);
-        
-        if (membersError) throw membersError;
-        
-        document.getElementById('createGroupForm').reset();
-        await loadChats();
-        loadChat(newGroup.id, 'group');
-        newChatModal.classList.remove('active');
-    } catch (error) {
-        console.error('Create group error:', error);
-        alert('Failed to create group');
-    }
-});
-
-// ===== MODAL TABS =====
-
-document.querySelectorAll('.modal .tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const modal = e.target.closest('.modal');
-        const tab = e.target.dataset.tab;
-        
-        modal.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        
-        modal.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        modal.querySelector(`#${tab}-tab`)?.classList.add('active');
-    });
-});
-
-// Chat tabs filter
-document.querySelectorAll('.chat-tab').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        
-        const type = e.target.dataset.type;
-        const chatsList = document.getElementById('chatsList');
-        const items = chatsList.querySelectorAll('.chat-item');
-        
-        items.forEach(item => {
-            if (type === 'all' || item.dataset.chatType === type) {
-                item.style.display = 'flex';
-            } else {
-                item.style.display = 'none';
-            }
-        });
-    });
-});
 
 // ===== REALTIME SUBSCRIPTIONS =====
 
